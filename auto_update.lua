@@ -21,7 +21,7 @@ local localFilename = args[1] -- Get the first argument
 -- // ======================== CONFIGURATION ======================== //
 local config = {
     -- REQUIRED: URL pointing to the *RAW* content of your program file
-    programUrl = "https://raw.githubusercontent.com/earv1/computercraft/refs/heads/main/"..localFilename,
+    programUrl = "https://raw.githubusercontent.com/earv1/computercraft/refs/heads/main/scripts"..localFilename,
 
     -- REQUIRED: The filename to save the program as locally
     localFilename = localFilename,
@@ -46,11 +46,16 @@ local function logError(message)
     printError("[ETagRunner] ERROR: " .. os.date("%H:%M:%S", os.epoch("utc")) .. " " .. message)
 end
 
+local noCacheHeaders = {
+    ["Cache-Control"] = "no-cache, no-store, must-revalidate", -- Standard HTTP/1.1 headers
+    ["Pragma"] = "no-cache",                                -- For older HTTP/1.0 caches/proxies
+    ["Expires"] = "0"                                       -- Another directive often used
+}
 -- Function to download and save the file (simplified, assumes overwrite needed)
 -- Returns: table (response headers from download), or nil on failure
 local function downloadAndSave()
     log("Attempting download from " .. config.programUrl)
-    local download_ok, handle_or_err = pcall(http.get, config.programUrl, nil, true)
+    local download_ok, handle_or_err = pcall(http.get, config.programUrl, noCacheHeaders, true)
 
     if not download_ok or not handle_or_err then
         logError("http.get failed: " .. tostring(handle_or_err or "Unknown HTTP error"))
@@ -90,25 +95,9 @@ log("Starting Simple ETag Check and Run Loop.")
 log("Target URL: " .. config.programUrl)
 log("Check Interval (when idle): " .. config.checkInterval .. "s")
 print("---")
-
-while true do
+function etagUpdated()
     local needsDownload = false
     local currentETag = nil
-    local currentTime = os.time("utc") -- Use os.time for integer seconds, matches os.epoch better historically
-
-    local elapsedSinceLastCheck = currentTime - lastCheckTimestamp
-
-    if elapsedSinceLastCheck < config.checkInterval then
-        local sleepDuration = config.checkInterval - elapsedSinceLastCheck
-        -- Only log if sleep is significant to avoid spam
-        if sleepDuration > 0.1 then
-            log(string.format("Minimum interval (%ds) not met. Waiting for %.1f s...", config.minCheckIntervalSeconds, sleepDuration))
-        end
-        lastCheckTimestamp = os.time("utc")
-    end
-
-
-    -- 1. Check Headers using Lua http API
     log("Checking headers for updates...")
     local check_ok, handle_or_err = pcall(http.check, config.programUrl)
     if check_ok and handle_or_err then
@@ -135,28 +124,13 @@ while true do
         needsDownload = true
     end
 
-    -- 2. Download if needed
     if needsDownload then
-        log("Update required or first run/file missing.")
-        local downloadHeaders = downloadAndSave() -- Attempt download
-        if downloadHeaders and downloadHeaders["ETag"] then
-            -- Update ETag based on the successful download's headers
-            lastKnownETag = downloadHeaders["ETag"]
-            log("Updated lastKnownETag to: " .. lastKnownETag)
-        elseif currentETag then
-             -- Fallback: If download failed but check gave us an ETag, use that.
-             lastKnownETag = currentETag
-             log("Download failed, using ETag from check: ".. lastKnownETag)
-        else
-             -- If check and download failed to get ETag, clear it.
-             lastKnownETag = nil
-             log("Could not get valid ETag from check or download.")
-        end
-    else
-        log("No download required.")
+        lastKnownETag = currentETag
     end
 
-    -- 3. Execute the program (if it exists)
+    return needsDownload
+end
+function  runFile()
     if fs.exists(config.localFilename) then
         log("Executing target program: " .. config.localFilename .. "...")
         print("--- Target Program Output Starts ---")
@@ -173,6 +147,30 @@ while true do
     -- 4. Wait before next check cycle
     log("Waiting for " .. config.checkInterval .. "s before next check...")
     log("--- Cycle Complete ---")
+end
 
+
+while true do
+    local currentTime = os.time("utc") -- Use os.time for integer seconds, matches os.epoch better historically
+
+    local elapsedSinceLastCheck = currentTime - lastCheckTimestamp
+
+    runFile()
+    if elapsedSinceLastCheck > config.checkInterval then
+        lastCheckTimestamp = os.time("utc")
+    else
+        goto continue
+    end
+
+    if not etagUpdated() then
+        log("No download required.")
+        goto continue
+    end
+
+    log("Update required or first run/file missing.")
+    downloadAndSave() -- Attempt downloa
+
+    -- 3. Execute the program (if it exists)
+    ::continue:: -- Label marking the end of the iteration
 end -- End of while true loop
 -- // =============================================================== //
