@@ -35,11 +35,6 @@ local config = {
 
 -- // ======================== SCRIPT STATE ========================= //
 local lastKnownETag = nil       -- Stores the last seen ETag HTTP header
-local fs = require("fs")        -- File System API
-local http = require("http")    -- HTTP API
-local shell = require("shell")  -- Shell API
--- // =============================================================== //
-
 
 -- // ======================== HELPER FUNCTIONS ===================== //
 local function log(message)
