@@ -116,7 +116,7 @@ while true do
             needsDownload = true
         end
     else
-        log("http.check failed or unavailable ("..tostring(handle_or_err or "N/A")."). Assuming download needed.")
+        log("http.check failed or unavailable ("..tostring(handle_or_err or "N/A").."). Assuming download needed.")
         needsDownload = true
     end
 
