@@ -21,7 +21,7 @@ local localFilename = args[1] -- Get the first argument
 -- // ======================== CONFIGURATION ======================== //
 local config = {
     -- REQUIRED: URL pointing to the *RAW* content of your program file
-    programUrl = "https://raw.githubusercontent.com/earv1/computercraft/refs/heads/main/"..#localFilename,
+    programUrl = "https://raw.githubusercontent.com/earv1/computercraft/refs/heads/main/"..localFilename,
 
     -- REQUIRED: The filename to save the program as locally
     localFilename = localFilename,
