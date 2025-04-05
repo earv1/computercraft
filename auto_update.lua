@@ -35,6 +35,7 @@ local config = {
 
 -- // ======================== SCRIPT STATE ========================= //
 local lastKnownETag = nil       -- Stores the last seen ETag HTTP header
+local lastCheckTimestamp = 0
 
 -- // ======================== HELPER FUNCTIONS ===================== //
 local function log(message)
@@ -93,6 +94,19 @@ print("---")
 while true do
     local needsDownload = false
     local currentETag = nil
+    local currentTime = os.time("utc") -- Use os.time for integer seconds, matches os.epoch better historically
+
+    local elapsedSinceLastCheck = currentTime - lastCheckTimestamp
+
+    if elapsedSinceLastCheck < config.checkInterval then
+        local sleepDuration = config.checkInterval - elapsedSinceLastCheck
+        -- Only log if sleep is significant to avoid spam
+        if sleepDuration > 0.1 then
+            log(string.format("Minimum interval (%ds) not met. Waiting for %.1f s...", config.minCheckIntervalSeconds, sleepDuration))
+        end
+        lastCheckTimestamp = os.time("utc")
+    end
+
 
     -- 1. Check Headers using Lua http API
     log("Checking headers for updates...")
@@ -151,19 +165,13 @@ while true do
         if not ok then
             logError("Target program '" .. config.localFilename .. "' crashed: " .. tostring(err))
             log("Waiting 10s before next cycle...")
-            os.sleep(10)
-        else
-            log("Target program finished.")
         end
     else
         logError("Target file '" .. config.localFilename .. "' does not exist. Cannot execute.")
-        log("Waiting 10s before next cycle...")
-        os.sleep(10)
     end
 
     -- 4. Wait before next check cycle
     log("Waiting for " .. config.checkInterval .. "s before next check...")
-    os.sleep(config.checkInterval)
     log("--- Cycle Complete ---")
 
 end -- End of while true loop
