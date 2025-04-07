@@ -21,7 +21,8 @@ local localFilename = args[1] -- Get the first argument
 -- // ======================== CONFIGURATION ======================== //
 local config = {
     -- REQUIRED: URL pointing to the *RAW* content of your program file
-    programUrl = "https://raw.githubusercontent.com/earv1/computercraft/refs/heads/main/scripts/"..localFilename,
+    --programUrl = "https://raw.githubusercontent.com/earv1/computercraft/refs/heads/main/scripts/"..localFilename,
+    programUrl = "https://mc.tunx.org/scripts/"..localFilename,
 
     -- REQUIRED: The filename to save the program as locally
     localFilename = localFilename,
@@ -104,17 +105,25 @@ function getEtag()
         headers = noCacheHeaders
     })
     
-    if not handle then
-        return nil, "Request failed: " .. (errorMsg or "unknown error")
-    end
-    
+    assert(handle, "Request failed: " .. (errorMsg or "unknown error"))
+
     -- Get the headers
     local headers = handle.getResponseHeaders()
+    print("Headers:")
+    for name, value in pairs(headers) do
+        print(name .. ": " .. value)
+    end
+
     -- Close the handle
     handle.close()
-    log("Etag: ".. headers["ETag"])
+
+    local etag = headers["Etag"] -- Note: header names might be case sensitive
+    if not etag then
+        etag = headers["etag"] -- Try lowercase if uppercase didn't work
+    end
+    log("Etag: ".. etag)
     -- Return just the ETag header
-    return headers["ETag"]
+    return etag
 end
 
 -- // ======================== MAIN LOOP ============================ //
@@ -127,14 +136,9 @@ function outdated()
         log("Local file '" .. config.localFilename .. "' missing.")
         return true
     end
-    if etag == nil then
-        log("http.request failed or unavailable")
-        os.exit(1)
-        return true
-    end
 
     if etag and lastKnownETag and etag == lastKnownETag then
-        log("ETag unchanged.")
+        log("Etag unchanged.")
         return false
     else
         lastKnownETag = etag
@@ -142,7 +146,7 @@ function outdated()
     end
 end
 
-function  runFile()
+function runFile()
     if fs.exists(config.localFilename) then
         log("Executing target program: " .. config.localFilename .. "...")
         print("--- Target Program Output Starts ---")
